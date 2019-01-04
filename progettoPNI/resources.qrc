@@ -1,0 +1,56 @@
+<RCC>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>grouping_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>config_and_create.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>compare_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>cavo_route_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>export.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>help.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>download.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>computo_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>VERTICAL_SOLUTIONS.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>metadata.txt</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>counting_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>razor_blade_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>calc_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>update_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>append_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>cloneschema_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>overlap_C83737.png</file>
+    </qresource>
+    <qresource prefix="/plugins/ProgettoPNI" >
+        <file>network_C83737.png</file>
+    </qresource>
+</RCC>
