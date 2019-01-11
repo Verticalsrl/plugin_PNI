@@ -22,6 +22,15 @@
 """
 
 '''
+NUOVE NOTE PROGETTO PNI:
+
+- alcuni shp in caricamento possono gia' avere il campo gid, ma non e' univoco, e la procedura di caricamento su DB da errore. Non sono riuscito a omettere questo campo nel caso esista, ma solo ad eliminarlo, anche se ha un comportamento strano. Dunque carico gli shp su DB usando come PK il campo gidd, sperando che cosi scritto non esista gia sugli shp. Funzione import_shp2db
+
+- esegui vacuum dello schema dopo l'import da shp2db, funzione import_shp2db
+
+
+
+
 VECCHIE NOTE del PLUGIN di partenza FTTH:
 - all'interno della funzione recupero_ui_cavo di db_cavoroute ho introdotto la variabile dict_null_id che contiene gli id dalla tabella pgrvertices_netpoints_array che non sono stati correttamente collegati col Routing molto presumibilmente perche' la geometria del layer cavo e' scorretta. Le coppie non associate al cavo vengono riportate nel file di log
 - ci sono delle moltiplicazioni di UI fatte in db_solid per popolare le n_ui di cavoroute, che non rappresentano dunque quelle reali ma le UI effettive...Da mail di Gatti del 03/02/2017
@@ -35,7 +44,6 @@ NUOVA VERSIONE - CASCATA:
     FIBRE_CAVO['PTA_PFS'] = FIBRE_CAVO['PTA_PD']
 - occorrerebbe forse a questo punto pensare ad un modo per come scollegare un punto SENZA eliminarlo...
 - le SCALE non essendo possibile eliminarle non e' possibile SCOLLEGARLE!
-
 
 
 OTTIMIZZAZIONI/DUBBI:
@@ -97,6 +105,7 @@ import numerazione_puntirete as numerazione_puntirete
 #importo DockWidget
 from Core_dockwidget import CoreDockWidget
 
+from collections import OrderedDict
 
 class ProgettoPNI:
     """QGIS Plugin Implementation."""
@@ -121,7 +130,34 @@ class ProgettoPNI:
     elif (int(Qgis_sw_version_arr[1]) >= 18):
         func_to_version = 2'''
     
-    #Modificare SOLO la SECONDA voce e non la PRIMA che rappresenta l'indice di questo dictionary. La seconda voce e' il nome come da Legenda in QGis:
+    
+    #NUOVO dictionary per progetto PNI: probabilmente piu utile come promemoria per me...
+    LAYER_TYPE = {
+        'PNI_SCORTA': 'POINT',
+        'PNI_GIUNTO': 'POINT',
+        'PNI_GRAFO': 'LINESTRING',
+        'PNI_LOCATION': 'POINT',
+        'PNI_ROUTE': 'LINESTRING',
+        'PNI_CAVO': 'LINESTRING',
+        'PNI_PFS': 'POLYGON',
+        'PNI_PFP': 'POLYGON'
+    }
+    #Modificare SOLO la SECONDA voce e non la PRIMA che rappresenta l'indice di questo dictionary. La seconda voce e' il nome come da Legenda in QGis. L'ORDINE sarebbe quello di caricamento, ma per non scombinarlo son costretto a creare un orderedDict:
+    LAYER_NAME_PNI_unordered = {
+        'PNI_SCORTA': 'ebw_scorta',
+        'PNI_GIUNTO': 'ebw_giunto',
+        'PNI_GRAFO': 'ebw_grafo',
+        'PNI_LOCATION': 'ebw_location',
+        'PNI_ROUTE': 'ebw_route',
+        'PNI_CAVO': 'ebw_cavo',
+        'PNI_PFS': 'ebw_pfs',
+        'PNI_PFP': 'ebw_pfp'
+    }
+    #ordino i layer in base a come li voglio visualizzare, l'ordine e' inverso!
+    order_of_keys = ["PNI_PFP", "PNI_PFS", "PNI_CAVO", "PNI_ROUTE", "PNI_LOCATION", "PNI_GRAFO", "PNI_GIUNTO", "PNI_SCORTA"]
+    list_of_tuples = [(key, LAYER_NAME_PNI_unordered[key]) for key in order_of_keys]
+    LAYER_NAME_PNI = OrderedDict(list_of_tuples)
+    
     LAYER_NAME = {
         'SCALA': 'Scala',
         'PTA': 'Giunti',
@@ -278,31 +314,31 @@ class ProgettoPNI:
         self.dlg_config.dirBrowse_txt.clear()
         self.dlg_config.dirBrowse_btn.clicked.connect(self.select_output_dir)
         #Seleziono layer SCALA per inizializza un nuovo progetto da zero:
-        self.dlg_config.shpBrowse_btn.clicked.connect(self.select_shp_scala)
+        #self.dlg_config.shpBrowse_btn.clicked.connect(self.select_shp_scala)
         #self.dlg_config.cavoBrowse_btn.clicked.connect(self.select_shp_cavo)
         #Ad ogni nuova riapertura del pannello di configurazione del progetto disabilito alcuni pannelli:
         self.dlg_config.import_DB.setEnabled(False);
-        self.dlg_config.variabili_DB.setEnabled(False);
+        #self.dlg_config.variabili_DB.setEnabled(False);
         #Verifico se i dati sono o meno gia' importati sul DB escludendo la doppia scelta:
         self.dlg_config.no_import.clicked.connect(self.toggle_no_import)
         self.dlg_config.si_import.clicked.connect(self.toggle_si_import)
-        self.dlg_config.si_inizializza.clicked.connect(self.toggle_si_inizializza)
+        #self.dlg_config.si_inizializza.clicked.connect(self.toggle_si_inizializza)
         #Azioni sul tasto import per spostare gli shp su DB:
         self.dlg_config.import_shp.clicked.connect(self.import_shp2db)
         #Azioni sul taasto import_scala per inizializzare un nuovo progetto:
-        self.dlg_config.import_scala.clicked.connect(self.inizializza_DB)
+        #self.dlg_config.import_scala.clicked.connect(self.inizializza_DB)
         
         self.dlg_export.dirBrowse_btn.clicked.connect(self.select_output_dir_export)
         self.dlg_export.exportBtn.clicked.connect(self.exportDB)
         
         self.dlg_cloneschema.cloneschemaBtn.clicked.connect(self.cloneschemaDB)
         
-        self.dlg_append.shpBrowse_btn.clicked.connect(self.select_shp_scala_append)
+        #self.dlg_append.shpBrowse_btn.clicked.connect(self.select_shp_scala_append)
         self.dlg_append.importBtn.clicked.connect(self.append_scala)
         self.dlg_append.importBtn_DbManager.clicked.connect(self.append_scala_DbManager)
         
         #AZIONO PULSANTE PERSONALIZZATO:
-        self.dlg_config.aggiorna_variabiliBtn.clicked.connect(self.inizializzaDB)
+        #self.dlg_config.aggiorna_variabiliBtn.clicked.connect(self.inizializzaDB)
         self.dlg_config.importBtn.clicked.connect(self.load_layers_from_db)
         
         #AZIONO pulsante per TESTARE CONNESSIONE AL DB:
@@ -362,24 +398,24 @@ class ProgettoPNI:
         tab_attivo = self.dlg_config.no_import.isChecked()
         if (tab_attivo==True):
             self.dlg_config.si_import.setChecked(False)
-            self.dlg_config.si_inizializza.setChecked(False)
-            self.dlg_config.variabili_DB.setEnabled(True) #attivo il toolbox delle variabili
+            #self.dlg_config.si_inizializza.setChecked(False)
+            #self.dlg_config.variabili_DB.setEnabled(True) #attivo il toolbox delle variabili
             self.dlg_config.importBtn.setEnabled(True) #attivo il pulsante di caricamento layer da DB sulla TOC
         else:
             self.dlg_config.si_import.setChecked(True) #insomma funziona alla stregua di un radio_button
-            self.dlg_config.variabili_DB.setEnabled(False)
+            #self.dlg_config.variabili_DB.setEnabled(False)
             self.dlg_config.importBtn.setEnabled(False)
             
     def toggle_si_import(self):
         tab_attivo = self.dlg_config.si_import.isChecked()
         if (tab_attivo==True):
             self.dlg_config.no_import.setChecked(False)
-            self.dlg_config.si_inizializza.setChecked(False)
-            self.dlg_config.variabili_DB.setEnabled(False)
+            #self.dlg_config.si_inizializza.setChecked(False)
+            #self.dlg_config.variabili_DB.setEnabled(False)
             self.dlg_config.importBtn.setEnabled(False)
         else:
             self.dlg_config.no_import.setChecked(True) #insomma funziona alla stregua di un radio_button
-            self.dlg_config.variabili_DB.setEnabled(True) #attivo il toolbox delle variabili
+            #self.dlg_config.variabili_DB.setEnabled(True) #attivo il toolbox delle variabili
             self.dlg_config.importBtn.setEnabled(True) #attivo il pulsante di caricamento layer da DB sulla TOC
             
     def toggle_si_inizializza(self):
@@ -637,33 +673,35 @@ class ProgettoPNI:
         #altrimenti devi importarti nel plugin l'eseguibile di shp2pgsql.exe. Pero a questo punto il plugin diventa piattaforma dipendente...
         
         self.dlg_config.import_progressBar.setValue(0)
-        self.dlg_config.import_progressBar.setMaximum(9)
-        self.dlg_config.txtFeedback_inizializza.setText("Sto caricando i dati, non interrompere, il processo potrebbe richiedere alcuni minuti...")
+        self.dlg_config.import_progressBar.setMaximum(len(LAYER_NAME_PNI))
+        self.dlg_config.txtFeedback_import.setText("Sto caricando i dati, non interrompere, il processo potrebbe richiedere alcuni minuti...")
         global epsg_srid
         #importo gli shp su db. Controllo che tutti i campi siano compilati prima di procedere:
         msg = QMessageBox()
         try:
             schemaDB = self.dlg_config.schemaDB.text()
             dirname_text = self.dlg_config.dirBrowse_txt.text()
-            scala_shp = self.dlg_config.scala_shp.text()
+            
+            scorta_shp = self.dlg_config.scorta_shp.text()
             giunto_shp = self.dlg_config.giunto_shp.text()
-            pd_shp = self.dlg_config.pd_shp.text()
-            pfs_shp = self.dlg_config.pfs_shp.text()
-            pfp_shp = self.dlg_config.pfp_shp.text()
-            pozzetto_shp = self.dlg_config.pozzetto_shp.text()
+            location_shp = self.dlg_config.location_shp.text()
+            grafo_shp = self.dlg_config.grafo_shp.text()
+            route_shp = self.dlg_config.route_shp.text()
+            #pozzetto_shp = self.dlg_config.pozzetto_shp.text()
             areapfs_shp = self.dlg_config.areapfs_shp.text()
             areapfp_shp = self.dlg_config.areapfp_shp.text()
             cavo_shp = self.dlg_config.cavo_shp.text()
+            
             codpop = int(self.dlg_config.codpopDB_2.text())
             comuneDB = self.dlg_config.comuneDB_2.text()
             codice_lotto = self.dlg_config.lottoDB_2.text()
-            if ( (dirname_text is None) or (scala_shp is None) or (dirname_text=='') or (scala_shp=='') ):
+            if ( (dirname_text is None) or (scorta_shp is None) or (dirname_text=='') or (scorta_shp=='') ):
                 raise NameError('Specificare TUTTI i nomi degli shp e il percorso di origine!')
-            if ( (giunto_shp is None) or (pd_shp is None) or (giunto_shp=='') or (pd_shp=='') ):
+            if ( (giunto_shp is None) or (location_shp is None) or (giunto_shp=='') or (location_shp=='') ):
                 raise NameError('Specificare TUTTI i nomi degli shp e il percorso di origine!')
-            if ( (pfs_shp is None) or (pfp_shp is None) or (pfs_shp=='') or (pfp_shp=='') ):
+            if ( (grafo_shp is None) or (route_shp is None) or (grafo_shp=='') or (route_shp=='') ):
                 raise NameError('Specificare TUTTI i nomi degli shp e il percorso di origine!')
-            if ( (pozzetto_shp is None) or (areapfs_shp is None) or (pozzetto_shp=='') or (areapfs_shp=='') ):
+            if ( (areapfs_shp is None) or (areapfs_shp=='') ):
                 raise NameError('Specificare TUTTI i nomi degli shp e il percorso di origine!')
             if ( (areapfp_shp is None) or (cavo_shp is None) or (areapfp_shp=='') or (cavo_shp=='') ):
                 raise NameError('Specificare TUTTI i nomi degli shp e il percorso di origine!')
@@ -676,22 +714,19 @@ class ProgettoPNI:
             if ( len(comuneDB)>4 ):
                 raise NameError('COMUNE: massimo 4 caratteri')
             #VERIFICO che nella directory indicata vi siano TUTTI i layer indicati, cioe' gli shp:
-            filepath = "%s/%s.shp" % (dirname_text, scala_shp)
+            filepath = "%s/%s.shp" % (dirname_text, scorta_shp)
             if not os.path.isfile(filepath):
                 raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
             filepath = "%s/%s.shp" % (dirname_text, giunto_shp)
             if not os.path.isfile(filepath):
                 raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
-            filepath = "%s/%s.shp" % (dirname_text, pd_shp)
+            filepath = "%s/%s.shp" % (dirname_text, location_shp)
             if not os.path.isfile(filepath):
                 raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
-            filepath = "%s/%s.shp" % (dirname_text, pfs_shp)
+            filepath = "%s/%s.shp" % (dirname_text, grafo_shp)
             if not os.path.isfile(filepath):
                 raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
-            filepath = "%s/%s.shp" % (dirname_text, pfp_shp)
-            if not os.path.isfile(filepath):
-                raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
-            filepath = "%s/%s.shp" % (dirname_text, pozzetto_shp)
+            filepath = "%s/%s.shp" % (dirname_text, route_shp)
             if not os.path.isfile(filepath):
                 raise NameError("ATTENZIONE! Manca il file '%s' nel percorso indicato" % (os.path.basename(filepath)) )
             filepath = "%s/%s.shp" % (dirname_text, areapfs_shp)
@@ -731,16 +766,15 @@ class ProgettoPNI:
                 for layer in layers:
                     QgsMapLayerRegistry.instance().removeMapLayer(layer.id())
             #Adesso recupero il percorso degli shp e li carico sulla TOC:
-            layer_scala = QgsVectorLayer(dirname_text+"\\"+scala_shp+".shp", self.LAYER_NAME['SCALA'], "ogr")
-            layer_giunto = QgsVectorLayer(dirname_text+"\\"+giunto_shp+".shp", self.LAYER_NAME['GIUNTO'], "ogr")
-            layer_pd = QgsVectorLayer(dirname_text+"\\"+pd_shp+".shp", self.LAYER_NAME['PD'], "ogr")
-            layer_pfs = QgsVectorLayer(dirname_text+"\\"+pfs_shp+".shp", self.LAYER_NAME['PFS'], "ogr")
-            layer_pfp = QgsVectorLayer(dirname_text+"\\"+pfp_shp+".shp", self.LAYER_NAME['PFP'], "ogr")
-            layer_pozzetto = QgsVectorLayer(dirname_text+"\\"+pozzetto_shp+".shp", self.LAYER_NAME['Pozzetto'], "ogr")
-            layer_areapfs = QgsVectorLayer(dirname_text+"\\"+areapfs_shp+".shp", self.LAYER_NAME['Area_PFS'], "ogr")
-            layer_areapfp = QgsVectorLayer(dirname_text+"\\"+areapfp_shp+".shp", self.LAYER_NAME['Area_PFP'], "ogr")
-            layer_cavo = QgsVectorLayer(dirname_text+"\\"+cavo_shp+".shp", self.LAYER_NAME['CAVO'], "ogr")
-            lista_layer_to_load=[layer_scala, layer_giunto, layer_pd, layer_pfs, layer_pfp, layer_pozzetto, layer_areapfs, layer_areapfp, layer_cavo]
+            layer_scorta = QgsVectorLayer(dirname_text+"\\"+scorta_shp+".shp", self.LAYER_NAME_PNI['PNI_SCORTA'], "ogr")
+            layer_giunto = QgsVectorLayer(dirname_text+"\\"+giunto_shp+".shp", self.LAYER_NAME_PNI['PNI_GIUNTO'], "ogr")
+            layer_location = QgsVectorLayer(dirname_text+"\\"+location_shp+".shp", self.LAYER_NAME_PNI['PNI_LOCATION'], "ogr")
+            layer_grafo = QgsVectorLayer(dirname_text+"\\"+grafo_shp+".shp", self.LAYER_NAME_PNI['PNI_GRAFO'], "ogr")
+            layer_route = QgsVectorLayer(dirname_text+"\\"+route_shp+".shp", self.LAYER_NAME_PNI['PNI_ROUTE'], "ogr")
+            layer_areapfs = QgsVectorLayer(dirname_text+"\\"+areapfs_shp+".shp", self.LAYER_NAME_PNI['PNI_PFS'], "ogr")
+            layer_areapfp = QgsVectorLayer(dirname_text+"\\"+areapfp_shp+".shp", self.LAYER_NAME_PNI['PNI_PFP'], "ogr")
+            layer_cavo = QgsVectorLayer(dirname_text+"\\"+cavo_shp+".shp", self.LAYER_NAME_PNI['PNI_CAVO'], "ogr")
+            lista_layer_to_load=[layer_scorta, layer_giunto, layer_grafo, layer_location, layer_route, layer_cavo, layer_areapfs, layer_areapfp]
             QgsMapLayerRegistry.instance().addMapLayers(lista_layer_to_load)
             #Li spengo di default e li importo direttamente sul DB:
             crs = None
@@ -754,6 +788,19 @@ class ProgettoPNI:
                 for layer_loaded in lista_layer_to_load:
                     self.iface.legendInterface().setLayerVisible(layer_loaded, False)
                     layer_loaded_geom = layer_loaded.wkbType()
+                    
+                    #PNI: in alcuni casi lo shp ha colonna gid ma non e' ben compilata. Elimino il campo-ma come?
+                    gid_esistente = layer_loaded.fieldNameIndex('gid')
+                    gid_idx_List = list()
+                    if (gid_esistente>-1):
+                        Utils.logMessage("campo gid su shp gia' esistente, lo elimino")
+                        gid_idx_List.append(gid_esistente)
+                        #layer_loaded.dataProvider().deleteAttributes(gid_idx_List) #lo elimina proprio dallo shp!
+                        #altra opzione: lo rinomino, ma lo shp deve entrare in editmode:
+                        #layer_loaded.renameAttribute(gid_esistente, 'gid_old')
+                    else:
+                        Utils.logMessage("campo gid su shp non esistente: continuo")
+
                     uri = None
                     '''
                     if layer_loaded_geom==4:
@@ -765,7 +812,7 @@ class ProgettoPNI:
                     elif layer_loaded_geom==2:
                         uri = "%s key=gid type=MULTILINESTRING table=\"%s\".\"%s\" (geom) sql=" % (dest_dir, schemaDB, layer_loaded.name().lower())
                     '''
-                    uri = "%s key=gid table=\"%s\".\"%s\" (geom) sql=" % (dest_dir, schemaDB, layer_loaded.name().lower())
+                    uri = "%s key=gidd table=\"%s\".\"%s\" (geom) sql=" % (dest_dir, schemaDB, layer_loaded.name().lower())
                     Utils.logMessage('WKB: ' + str(layer_loaded_geom) + '; DEST_DIR: ' + str(dest_dir))
                     crs = layer_loaded.crs()
                     error = QgsVectorLayerImport.importLayer(layer_loaded, uri, "postgres", crs, False, False, options)
@@ -784,13 +831,17 @@ class ProgettoPNI:
                 #apro il cursore per leggere/scrivere sul DB:
                 test_conn = psycopg2.connect(dest_dir)
                 cur = test_conn.cursor()
+                
+                '''
                 #creo la tabella delle variabili di progetto, droppandola se esiste gia':
                 query = "SET search_path = %s, pg_catalog;" % (schemaDB)
                 Utils.logMessage('Adesso creo la tabella con le variabili in ' + str(schemaDB))
                 cur.execute(query)
                 sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_tab_variabili_progetto.sql'
                 cur.execute(open(sql_file, "r").read())
+                '''
                 
+                '''
                 #Da mail di Gatti del 25/08/2017: risulta che caricando lo SHP delle SCALE non sempre il gid e' calcolato. Lo ricalcolo a prescindere.
                 #Unisco un po' di query nella speranza di ridurre i tempi:
                 epsg_srid = int(crs.postgisSrid())
@@ -798,10 +849,12 @@ class ProgettoPNI:
                 query_id_scala = "UPDATE scala SET id_scala = '%s'||'%s'||lpad(gid::text, 5, '0'); INSERT INTO variabili_progetto (srid, id_pop, cod_belf, lotto) VALUES (%i, %i, '%s', '%s');" % (comuneDB, codice_lotto, epsg_srid, codpop, comuneDB, codice_lotto)
                 cur.execute(query_id_scala)
                 test_conn.commit()
+                '''
                 
                 #query_insert = "INSERT INTO variabili_progetto (srid, id_pop, cod_belf) VALUES (%i, %i, '%s');" % (epsg_srid, codpop, comuneDB)
                 #cur.execute(query_insert)
                 
+                '''
                 #le uniche altre tabelle da creare sono POP e SOTTOTRATTA:
                 sql_create_pop = """DROP TABLE IF EXISTS sottotratta;
                 DROP TABLE IF EXISTS pop;
@@ -858,11 +911,15 @@ class ProgettoPNI:
             );
                 CREATE INDEX sottotratta_geom_idx ON sottotratta USING gist (geom);""" %(epsg_srid, epsg_srid)
                 cur.execute(sql_create_pop)
+                '''
                 
+                '''
                 #Creo le altre tabelle e funzioni nello schema selezionato:
                 sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_triggers.sql'
                 cur.execute(open(sql_file, "r").read())
+                '''
                 
+                '''
                 #Aggiungo alcune CONSTRAINTS alle tabelle:
                 query_add_constraints = """ALTER TABLE giunti ADD UNIQUE (id_giunto);
                 ALTER TABLE pd ADD UNIQUE (id_pd);
@@ -873,7 +930,9 @@ class ProgettoPNI:
                 cur.execute(query_add_constraints)
                 test_conn.commit()
                 #se c'e' qualche errore, il plugin lo restituisce con l'except finale.
+                '''
                 
+                '''
                 #Dopodiche' aggiorno alcuni parametri sulle tabelle: il CODICE COMUNE lo faccio inserire a mano:
                 query_alter_giunti = "ALTER TABLE giunti ALTER COLUMN cod_belf SET DEFAULT '%s'; ALTER TABLE giunti ALTER COLUMN lotto SET DEFAULT '%s'; ALTER TABLE giunti ALTER COLUMN id_pop SET DEFAULT '%s';" % (comuneDB, codice_lotto, codpop)
                 cur.execute(query_alter_giunti)
@@ -892,6 +951,8 @@ class ProgettoPNI:
                 #Associo i trigger DELETE alle tabelle:
                 query_trigger_delete = "CREATE TRIGGER delete_feature AFTER DELETE ON scala FOR EACH ROW EXECUTE PROCEDURE %s.delete_scala('%s'); CREATE TRIGGER delete_feature AFTER DELETE ON giunti FOR EACH ROW EXECUTE PROCEDURE %s.delete_giunto('%s'); CREATE TRIGGER delete_feature AFTER DELETE ON pd FOR EACH ROW EXECUTE PROCEDURE %s.delete_pd('%s'); CREATE TRIGGER delete_feature AFTER DELETE ON pfp FOR EACH ROW EXECUTE PROCEDURE %s.delete_pfp('%s'); CREATE TRIGGER delete_feature AFTER DELETE ON pfs FOR EACH ROW EXECUTE PROCEDURE %s.delete_pfs('%s');" % (schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB)
                 cur.execute(query_trigger_delete)
+                '''
+                
                 query_trigger_update = '''CREATE TRIGGER update_ids_giunto BEFORE INSERT ON giunti FOR EACH ROW EXECUTE PROCEDURE update_giunto('%s');
                 CREATE TRIGGER update_ids_pd BEFORE INSERT ON pd FOR EACH ROW EXECUTE PROCEDURE update_pd('%s');
                 CREATE TRIGGER update_ids_pfs BEFORE INSERT ON pfs FOR EACH ROW EXECUTE PROCEDURE update_pfs('%s');
@@ -899,7 +960,7 @@ class ProgettoPNI:
                 CREATE TRIGGER update_ids_pop BEFORE INSERT ON pop FOR EACH ROW EXECUTE PROCEDURE update_pop('%s');
                 CREATE TRIGGER update_ids_cavo BEFORE INSERT ON cavo FOR EACH ROW EXECUTE PROCEDURE update_cavo('%s');
                 CREATE TRIGGER update_ids_pozzetto BEFORE INSERT ON pozzetto FOR EACH ROW EXECUTE PROCEDURE update_pozzetto('%s');'''  % (schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB, schemaDB)
-                cur.execute(query_trigger_update)
+                #cur.execute(query_trigger_update)
                 
                 #Risetto il search_path originario perche forse se lo tiene in pancia quello vecchio:
                 query_path = 'SET search_path = public;'
@@ -907,6 +968,7 @@ class ProgettoPNI:
                 # Make the changes to the database persistent
                 test_conn.commit()
                 
+                '''
                 #creo la tabella, vuota, cavoroute, la droppo se eventualmente esiste gia':
                 query_cavoroute_raw = """DROP TABLE IF EXISTS %(schema)s.cavoroute; CREATE TABLE IF NOT EXISTS %(schema)s.cavoroute (
                     gid serial NOT NULL PRIMARY KEY, id_cavo character varying(64), fibre_coun integer, n_ui integer, n_ui_reali integer, from_p character varying(64), to_p character varying(64), net_type character varying(255), length_m double precision, source integer, target integer, geom public.geometry(MultiLineString, %(epsg_srid)i), tipo_posa character varying(450)[], n_gnz_un smallint, n_gnz_tot integer, n_gnz_min8 smallint, n_gnz_mag8 smallint, n_gnz_min12 smallint, n_gnz_mag12 smallint, teste_cavo smallint, scorta smallint, terminaz integer, temp_cavo_label character varying(250)[], lung_ott double precision);
@@ -915,10 +977,15 @@ class ProgettoPNI:
                 query_cavoroute = query_cavoroute_raw % {'schema': schemaDB, 'epsg_srid': epsg_srid}
                 cur.execute(query_cavoroute)
                 test_conn.commit()
+                '''
                 
+                '''
                 #Modifico eventualmente il nome di alcuni campi, o ne aggiungo, richiamando una funzione:
                 cur.execute("SELECT public.s_alter_table_fn('%s', %i);SELECT public.s_alter_scala_fn('%s', %i);" % (schemaDB, epsg_srid, schemaDB, epsg_srid))
                 test_conn.commit()
+                '''
+                
+                
                 '''
                 #modifico il nome del campo totale_ui delle scale a n_ui:
                 query_ui = """ALTER TABLE %s.scala RENAME COLUMN totale_ui TO n_ui;""" % (schemaDB)
@@ -981,6 +1048,8 @@ class ProgettoPNI:
                 #except psycopg2.Error, e:
                 #    Utils.logMessage(e.pgerror)
                 #    Utils.logMessage("Campo length_m gia' double o non possibile trasformarlo in double")
+                
+                '''
                 #Inoltre ho notato un errore nel routing nel caso in cui il campo GID non sia INTEGER ma ad esempio BIGINT...Se il problema si ripresenta forse si puo risolvere con un cast_to_integer nelle query con pgr_dijkstra
                 query_gids_int_raw = """ALTER TABLE %(schema)s.area_pfp ALTER COLUMN gid TYPE integer;
                 ALTER TABLE %(schema)s.area_pfs ALTER COLUMN gid TYPE integer;
@@ -997,6 +1066,7 @@ class ProgettoPNI:
                 cur.execute(query_gids_int)
                 #se c'e' qualche errore, il plugin lo restituisce con l'except finale.
                 test_conn.commit()
+                '''
                 
                 cur.close()
                 test_conn.close()
@@ -1015,15 +1085,15 @@ class ProgettoPNI:
                 #Abilito le restanti sezioni e pulsanti
                 self.dlg_config.chkDB.setEnabled(False)
                 self.dlg_config.import_DB.setEnabled(False)
-                self.dlg_config.variabili_DB.setEnabled(True)
+                #self.dlg_config.variabili_DB.setEnabled(True)
                 self.dlg_config.importBtn.setEnabled(True)
             finally:
                 if test_conn is not None:
                     try:
                         test_conn.close()
                     except:
-                        msg.setText('server closed the connection unexpectedly')
-                        msg.setIcon(QMessageBox.Critical)
+                        msg.setText("La procedura e' andata a buon fine oppure la connessione al server si e' chiusa inaspettatamente: controlla il messaggio nella casella 'controllo'")
+                        msg.setIcon(QMessageBox.Warning)
                         msg.setStandardButtons(QMessageBox.Ok)
                         retval = msg.exec_()
     
@@ -1037,7 +1107,9 @@ class ProgettoPNI:
             QgsMapLayerRegistry.instance().removeMapLayer(layer.id())
         try:
             #ciclo dentro la variabile LAYER_NAME e carico i layer da DB:
-            for key, value in sorted(self.LAYER_NAME.items()): #casualmente l'ordine alfabetico ci piace...altrimenti devi usare "from collections import OrderedDict, LAYER_NAME=OrderedDict(), LAYER_NAME['SCALA']='Scala'" etc..
+            #for key, value in sorted(self.LAYER_NAME_PNI.items()): #casualmente l'ordine alfabetico ci piace...altrimenti devi usare "from collections import OrderedDict, LAYER_NAME_PNI=OrderedDict(), LAYER_NAME_PNI['SCALA']='Scala'" etc..
+            #nel caso del progetto PNI provo a non ordinare il dict ma uso l'orderedDict:
+            for key, value in self.LAYER_NAME_PNI.items():
                 if ( (key=="GIUNTO_F_dev") | (key=="PTA") | (key=="SCALA_F") | (key=="PD_F") | (key=="SCALA_append") ):
                     continue #evito di caricare 2/3 volte il layer GIUNTO
                 Utils.logMessage('nome layerDB da caricare: ' + value)
@@ -3573,15 +3645,15 @@ PFS: %(id_pfs)s"""
         self.dlg_config.importBtn.setEnabled(False);
         
         self.dlg_config.import_DB.setEnabled(False);
-        self.dlg_config.variabili_DB.setEnabled(False);
+        #self.dlg_config.variabili_DB.setEnabled(False);
         self.dlg_config.si_import.setChecked(False)
         self.dlg_config.no_import.setChecked(False)
-        self.dlg_config.modifica_variabili.setChecked(False)
+        #self.dlg_config.modifica_variabili.setChecked(False)
         
-        self.dlg_config.shpBrowse_txt.clear()
+        #self.dlg_config.shpBrowse_txt.clear()
         #self.dlg_config.cavoBrowse_txt.clear()
-        self.dlg_config.si_inizializza.setChecked(False)
-        self.dlg_config.txtFeedback_inizializza.clear()
+        #self.dlg_config.si_inizializza.setChecked(False)
+        #self.dlg_config.txtFeedback_inizializza.clear()
         
         
     def run_compare(self):
