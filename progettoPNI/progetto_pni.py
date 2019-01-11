@@ -642,7 +642,7 @@ class ProgettoPNI:
                 test_conn.rollback()
                 return 0
             else:
-                self.dlg_config.txtFeedback_inizializza.setText("Dati importati con successo! Puoi passare alle sezioni C o D")
+                self.dlg_config.txtFeedback_inizializza.setText("Dati importati con successo! Puoi passare alla sezione C")
                 #Abilito le restanti sezioni e pulsanti
                 self.dlg_config.chkDB.setEnabled(False)
                 self.dlg_config.import_DB.setEnabled(False)
@@ -673,7 +673,7 @@ class ProgettoPNI:
         #altrimenti devi importarti nel plugin l'eseguibile di shp2pgsql.exe. Pero a questo punto il plugin diventa piattaforma dipendente...
         
         self.dlg_config.import_progressBar.setValue(0)
-        self.dlg_config.import_progressBar.setMaximum(len(LAYER_NAME_PNI))
+        self.dlg_config.import_progressBar.setMaximum(len(self.LAYER_NAME_PNI))
         self.dlg_config.txtFeedback_import.setText("Sto caricando i dati, non interrompere, il processo potrebbe richiedere alcuni minuti...")
         global epsg_srid
         #importo gli shp su db. Controllo che tutti i campi siano compilati prima di procedere:
@@ -1081,7 +1081,7 @@ class ProgettoPNI:
                 test_conn.rollback()
                 return 0
             else:
-                self.dlg_config.txtFeedback_import.setText("Dati importati con successo! Puoi passare alle sezioni C o D")
+                self.dlg_config.txtFeedback_import.setText("Dati importati con successo! Puoi passare alla sezione C")
                 #Abilito le restanti sezioni e pulsanti
                 self.dlg_config.chkDB.setEnabled(False)
                 self.dlg_config.import_DB.setEnabled(False)
