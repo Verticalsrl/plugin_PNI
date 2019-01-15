@@ -26,7 +26,10 @@ NUOVE NOTE PROGETTO PNI:
 
 - alcuni shp in caricamento possono gia' avere il campo gid, ma non e' univoco, e la procedura di caricamento su DB da errore. Non sono riuscito a omettere questo campo nel caso esista, ma solo ad eliminarlo, anche se ha un comportamento strano. Dunque carico gli shp su DB usando come PK il campo gidd, sperando che cosi scritto non esista gia sugli shp. Funzione import_shp2db
 
-- esegui vacuum dello schema dopo l'import da shp2db, funzione import_shp2db
+- esegui vacuum dello schema dopo l'import da shp2db, funzione import_shp2db, oppure guarda anche il python ImportIntoPostGIS recuperato da web, che sfrutta la libreria di cui non ho ancora trovato documentazione pero:
+	from processing.tools import dataobjects, postgis
+
+
 
 
 
@@ -1737,6 +1740,47 @@ class ProgettoPNI:
                 test_conn.close()
 
 
+    def inizializza_layer_PNI(self):
+        #Iniziamo col definire i layer che mi interessano andandoli a cercare nella legenda, visto che altrimenti non saprei come definirli:
+        global PNI_SCORTA_layer
+        global PNI_GIUNTO_layer
+        global PNI_GRAFO_layer
+        global PNI_LOCATION_layer
+        global PNI_ROUTE_layer
+        global PNI_CAVO_layer
+        global PNI_PFS_layer
+        global PNI_PFP_layer
+        #layers_caricati = iface.legendInterface().layers()
+        #ERRORE! Appena si avvia QGis non sa quali layer ha caricati, dunque da un errore perche queste LISTE sono VUOTE. Per questo motivo le richiamo all'interno di una funzione.
+        msg = QMessageBox()
+        msg.setWindowTitle("Aggiungere il layer mancante alla TOC di QGis")
+        try:
+            PNI_SCORTA_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_SCORTA'])[0]
+            crs = PNI_SCORTA_layer.crs()
+            epsg_srid = int(crs.postgisSrid())
+            self.epsg_srid = epsg_srid
+            #Utils.logMessage("Layer Scale: " + PNI_SCORTA_layer.name())
+            PNI_GIUNTO_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_GIUNTO'])[0]
+            PNI_GRAFO_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_GRAFO'])[0]
+            PNI_LOCATION_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_LOCATION'])[0]
+            PNI_ROUTE_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_ROUTE'])[0]
+            PNI_CAVO_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_CAVO'])[0]
+            PNI_PFS_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_PFS'])[0]
+            PNI_PFP_layer = QgsMapLayerRegistry.instance().mapLayersByName(self.LAYER_NAME_PNI['PNI_PFP'])[0]
+        
+        except IndexError as err:
+            Utils.logMessage(err.args[0])
+            msg.setText("Un layer fondamentale per il plugin manca nella TOC")
+            msg.setDetailedText("I layer che servono al plugin sono elencati di seguito. Notare che le lettere maiuscole-minuscole devono essere rispettate nel nome del layer nella TOC, mentre invece l'ordine non ha importanza: ebw_scorta, ebw_giunto, ebw_grafo, ebw_location, ebw_route, ebw_cavo, ebw_pfs, ebw_pfp.")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setStandardButtons(QMessageBox.Ok)
+            retval = msg.exec_()
+            return 0
+        
+        else:
+            Utils.logMessage("I layers necessari sono presenti sulla TOC di QGis. Posso proseguire")
+            return 1
+    
     def inizializza_layer(self):
         #Iniziamo col definire i layer che mi interessano andandoli a cercare nella legenda, visto che altrimenti non saprei come definirli:
         global SCALE_layer
@@ -3666,12 +3710,22 @@ PFS: %(id_pfs)s"""
         self.dlg_compare.comboBoxFromPoint.setCurrentIndex(idx_1)
         
     def run_export(self):
-        result_init = self.inizializza_layer()
+        result_init = self.inizializza_layer_PNI()
         if (result_init==0):
             return 0
         #recupero le info di connex al DB da un qualunque dei layer:
-        connInfo = SCALE_layer.source()
+        connInfo = PNI_SCORTA_layer.source()
         db_dir = self.estrai_param_connessione(connInfo)
+        #per evitare di esportare il progetto che contiene PNI_SCORTA come shp e non da DB:
+        if (db_dir.find("dbname=None") > -1) or (db_dir.find("host=None") > -1):
+            msg = QMessageBox()
+            msg.setWindowTitle("Stringa di connessione al DB non presente")
+            Utils.logMessage("db_dir: " + db_dir)
+            msg.setText("Per l'esportazione dei layer da DB tutti i layer presenti nella TOC devono essere presenti sul medesimo DB del layer ebw_scorta")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setStandardButtons(QMessageBox.Ok)
+            retval = msg.exec_()
+            return 0
         # show the dialog
         self.dlg_export.show()
         # Run the dialog event loop
