@@ -27,7 +27,7 @@ NUOVE NOTE PROGETTO PNI:
 - alcuni shp in caricamento possono gia' avere il campo gid, ma non e' univoco, e la procedura di caricamento su DB da errore. Non sono riuscito a omettere questo campo nel caso esista, ma solo ad eliminarlo, anche se ha un comportamento strano. Dunque carico gli shp su DB usando come PK il campo gidd, sperando che cosi scritto non esista gia sugli shp. Funzione import_shp2db
 
 - esegui vacuum dello schema dopo l'import da shp2db, funzione import_shp2db, oppure guarda anche il python ImportIntoPostGIS recuperato da web, che sfrutta la libreria di cui non ho ancora trovato documentazione pero:
-	from processing.tools import dataobjects, postgis
+    from processing.tools import dataobjects, postgis
 
 
 
@@ -3525,7 +3525,22 @@ PFS: %(id_pfs)s"""
             text=self.tr(u'Esporta il progetto in shp'),
             callback=self.run_export,
             parent=self.iface.mainWindow())
-            
+        
+        icon_path = ':/plugins/ProgettoPNI/label.png'
+        self.add_action(
+            icon_path,
+            text=self.tr(u'ottimizza le etichette per il layer ebw_cavo'),
+            #callback=self.run_updatedb,
+            callback=self.run_label,
+            parent=self.iface.mainWindow())
+        
+        icon_path = ':/plugins/ProgettoPNI/update.png'
+        self.add_action(
+            icon_path,
+            text=self.tr(u'aggiorna le funzioni a livello di DB'),
+            callback=self.run_updatedb,
+            parent=self.iface.mainWindow())
+        
         '''icon_path = ':/plugins/ProgettoPNI/cloneschema_C83737.png'
         self.add_action(
             icon_path,
@@ -4154,20 +4169,100 @@ PFS: %(id_pfs)s"""
                 if test_conn is not None:
                     test_conn.close()
         
+    def run_label(self):
+        result_init = self.inizializza_layer_PNI()
+        if (result_init==0):
+            return 0
+        #recupero le info di connex al DB da un qualunque dei layer:
+        connInfo = PNI_SCORTA_layer.source()
+        db_dir = self.estrai_param_connessione(connInfo)
+        msg = QMessageBox()
+        msg.setText("ATTENZIONE! Con questa azione verra eliminato il precedente cavo_labels e ne verra creato uno nuovo, salvo errori. Il progetto che verra' modificato sara': %s, schema: %s. Desideri davvero proseguire?" % (str(db_dir), theSchema))
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Rilanciare le labels per cavo?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        retval = msg.exec_()
+        if (retval != 16384): #l'utente NON ha cliccato yes: sceglie di fermarsi, esco
+            return 0
+        elif (retval == 16384): #l'utente HA CLICCATO YES.
+            #apro il cursore per leggere/scrivere sul DB:
+            conn_label = psycopg2.connect(db_dir)
+            cur_label = conn_label.cursor()
+            Utils.logMessage('LABEL: inizio la procedura')
+            #creazione di un layer ebw_cavo per etichettare le rotte. Lancio uno script sql esterno - SCRIPT ANCORA IN TEST!!
+            try:
+                query_topo = "SELECT public.split_lines_to_lines_pulizia('%s', %i); SELECT public.split_lines_to_lines_topo('%s', %i); SELECT public.split_lines_to_lines_conclusivo('%s', %i);" % (theSchema, self.epsg_srid, theSchema, self.epsg_srid, theSchema, self.epsg_srid)
+                #Utils.logMessage("query topo: " + query_topo)
+                Utils.logMessage('SPLIT_LINES: inizio la procedura')
+                cur_label.execute(query_topo)
+                conn_label.commit()
+                Utils.logMessage('SPLIT_LINES: fine procedura')
+                
+                Utils.logMessage('LABEL: cerco se esiste gia cavo_labels')
+                #before check if table already exist:
+                query_exist = """SELECT EXISTS (
+                    SELECT 1
+                    FROM   information_schema.tables 
+                    WHERE  table_schema = '%s'
+                    AND    table_name = 'cavo_labels'
+                    );
+                """ % (theSchema)
+                cur_label.execute(query_exist)
+                if cur_label.fetchone()[0]==True:
+                    #la tabella esiste gia'. La elimino per ricrearla
+                    query_drop = "DROP TABLE %s.cavo_labels" % (theSchema)
+                    cur_label.execute(query_drop)
+                    conn_label.commit()
+                    Utils.logMessage('LABEL: cavo_labels esistente ed eliminata')
+                query = "SET search_path = %s, public, pg_catalog;" % (theSchema)
+                cur_label.execute(query)
+                sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_cavo_per_label.sql'
+                cur_label.execute(open(sql_file, "r").read())
+                conn_label.commit()
+                
+                cur_label.close()
+                
+            except psycopg2.Error, e:
+                Utils.logMessage(e.pgerror)
+                conn_label.rollback()
+                QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di DB nel creare le labels per cavo. Esco dalla procedura')
+                Utils.logMessage('Errore di DB nel creare le labels per cavo. Esco dalla procedura')
+            except SystemError, e:
+                conn_label.rollback()
+                QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di sistema nel creare le labels per cavo. Esco dalla procedura')
+                Utils.logMessage('Errore di sistema nel creare le labels per cavo. Esco dalla procedura')
+            else:
+                #Carico il layer sulla mappa:
+                uri = "%s key=id table=\"%s\".\"cavo_labels\" (geom) sql=" % (db_dir, theSchema)
+                layer = QgsVectorLayer(uri, "cavo_labels", "postgres")
+                QgsMapLayerRegistry.instance().addMapLayer(layer)
+                layer.loadNamedStyle(os.getenv("HOME")+'/.qgis2/python/plugins/ProgettoPNI/qml_base/cavo_labels.qml')
+                Utils.logMessage('LABEL: fine della procedura con successo')
+                msg.setText("LABEL: effettuato con successo! Il nuovo layer e' stato aggiunto alla TOC")
+                msg.setIcon(QMessageBox.Information)
+                msg.setWindowTitle("LABEL: effettuato con successo!")
+                msg.setStandardButtons(QMessageBox.Ok)
+                retval = msg.exec_()
+                return 1
+            finally:
+                if conn_label:
+                    conn_label.close()
     
     def run_updatedb(self):
-        result_init = self.inizializza_layer()
+        result_init = self.inizializza_layer_PNI()
         if (result_init==0):
             return 0
         msg = QMessageBox()
         #recupero le info di connex al DB da un qualunque dei layer:
-        connInfo = SCALE_layer.source()
+        connInfo = PNI_SCORTA_layer.source()
         db_dir = self.estrai_param_connessione(connInfo)
         #apro il cursore per leggere/scrivere sul DB:
         conn_updatedb = psycopg2.connect(db_dir)
         cur_updatedb = conn_updatedb.cursor()
         Utils.logMessage('UPDATEDB: inizio la procedura')
         try:
+            #per il progetto PNi al momento queste funzioni non esistono
+            '''
             sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_funzione_scodificacable.sql'
             cur_updatedb.execute(open(sql_file, "r").read())
             conn_updatedb.commit()
@@ -4180,15 +4275,16 @@ PFS: %(id_pfs)s"""
             cur_updatedb.execute(open(sql_file, "r").read())
             conn_updatedb.commit()
             
-            sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_funzione_splitlines.sql'
-            cur_updatedb.execute(open(sql_file, "r").read())
-            conn_updatedb.commit()
-            
             sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_funzione_salterscala.sql'
             cur_updatedb.execute(open(sql_file, "r").read())
             conn_updatedb.commit()
             
             sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_funzione_saltertable.sql'
+            cur_updatedb.execute(open(sql_file, "r").read())
+            conn_updatedb.commit()
+            '''
+            
+            sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/creazione_funzione_splitlines.sql'
             cur_updatedb.execute(open(sql_file, "r").read())
             conn_updatedb.commit()
             

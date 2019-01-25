@@ -20,6 +20,9 @@
     <qresource prefix="/plugins/ProgettoPNI" >
         <file>download.png</file>
     </qresource>
+	<qresource prefix="/plugins/ProgettoPNI" >
+        <file>label.png</file>
+    </qresource>
     <qresource prefix="/plugins/ProgettoPNI" >
         <file>computo_C83737.png</file>
     </qresource>
@@ -39,7 +42,7 @@
         <file>calc_C83737.png</file>
     </qresource>
     <qresource prefix="/plugins/ProgettoPNI" >
-        <file>update_C83737.png</file>
+        <file>update.png</file>
     </qresource>
     <qresource prefix="/plugins/ProgettoPNI" >
         <file>append_C83737.png</file>
