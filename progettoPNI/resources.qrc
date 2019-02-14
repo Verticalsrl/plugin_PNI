@@ -14,6 +14,9 @@
     <qresource prefix="/plugins/ProgettoPNI" >
         <file>export.png</file>
     </qresource>
+	<qresource prefix="/plugins/ProgettoPNI" >
+        <file>pipes.png</file>
+    </qresource>
     <qresource prefix="/plugins/ProgettoPNI" >
         <file>help.png</file>
     </qresource>

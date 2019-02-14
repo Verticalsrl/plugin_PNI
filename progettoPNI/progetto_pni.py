@@ -3534,6 +3534,14 @@ PFS: %(id_pfs)s"""
             callback=self.run_label,
             parent=self.iface.mainWindow())
         
+        icon_path = ':/plugins/ProgettoPNI/pipes.png'
+        self.add_action(
+            icon_path,
+            text=self.tr(u'calcola minitubi per il layer ebw_route'),
+            #callback=self.run_updatedb,
+            callback=self.run_pipes,
+            parent=self.iface.mainWindow())
+        
         icon_path = ':/plugins/ProgettoPNI/update.png'
         self.add_action(
             icon_path,
@@ -4168,7 +4176,116 @@ PFS: %(id_pfs)s"""
                 QgsMapLayerRegistry.instance().removeMapLayer(layer_scala.id())
                 if test_conn is not None:
                     test_conn.close()
+    
+    
+    def run_pipes(self):
+        result_init = self.inizializza_layer_PNI()
+        if (result_init==0):
+            return 0
+        #recupero le info di connex al DB da un qualunque dei layer:
+        connInfo = PNI_SCORTA_layer.source()
+        db_dir = self.estrai_param_connessione(connInfo)
+        #mi connetto subito al DB in modo da restituire subito all'utente alcune info
+        conn_pipes = psycopg2.connect(db_dir)
+        cur_pipes = conn_pipes.cursor()
+        msg = QMessageBox()
         
+        try:
+            query_stat_raw = '''
+            SELECT 1, count(*) FROM %(theSchema)s.ebw_route t1, %(theSchema)s.ebw_cavo t2 WHERE t1.geom=t2.geom
+            UNION
+            SELECT 2, count(*)
+            FROM %(theSchema)s.ebw_route t1, %(theSchema)s.ebw_cavo t2
+            WHERE t1.gidd NOT IN (SELECT t1.gidd FROM %(theSchema)s.ebw_route t1, %(theSchema)s.ebw_cavo t2 WHERE t1.geom=t2.geom)
+            AND ST_Intersects(t1.geom, t2.geom)
+            AND Upper(ST_GeometryType(ST_Intersection(t1.geom, t2.geom))) LIKE '%%LINE%%'
+            UNION
+            SELECT 3, count(*) FROM %(theSchema)s.ebw_route
+            ORDER BY 1;
+            '''
+            Utils.logMessage(query_stat_raw)
+            query_stat = query_stat_raw % {'theSchema': theSchema}
+            cur_pipes.execute(query_stat)
+        except psycopg2.Error, e:
+            Utils.logMessage(e.pgerror)
+            QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di DB nel connettersi per calcolo minitubi. Esco dalla procedura')
+            Utils.logMessage('Errore di DB nel creare le labels per cavo. Esco dalla procedura')
+            return 0
+        except SystemError, e:
+            QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di sistema nel calcolare i minitubi. Esco dalla procedura')
+            Utils.logMessage('Errore di sistema nel creare le labels per cavo. Esco dalla procedura')
+            return 0
+        else:
+            #a questo punto il primo record contiene i record che si sovrappongono esattamente tra cavo e route, il secondo record quelle linee che si sovrappongono parzialmente, il terzo record il numero totale di record di route
+            results_stats = cur_pipes.fetchall()
+            for stats in results_stats:
+                if (stats[0]==1):
+                    linee_sovrapposte = stats[1]
+                elif (stats[0]==2):
+                    linee_parziali = stats[1]
+                elif (stats[0]==3):
+                    linee_totali = stats[1]
+            linee_orfane = linee_totali - (linee_sovrapposte+linee_parziali)
+        
+        Utils.logMessage('PIPES: restituisco statistiche iniziali all utente')
+        msg.setWindowTitle("Minitubi: proseguire con il calcolo?")
+        msg.setText("Calcolo Minitubi su layer ebw_route: guarda le statistiche su cavo e route espandendo la finestra con i dettagli. Sei sicuro di voler procedere?")
+        msg.setIcon(QMessageBox.Information)
+        msg.setDetailedText( "linee totali di route: %i \nlinee perfettamente concidenti: %i \nlinee parzialmente coincidenti: %i \n\nlinee di route per le quali NON verranno calcolati i minitubi mancando la sovrapposizione: %i" % (linee_totali, linee_sovrapposte, linee_parziali, linee_orfane) ) 
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        retval = msg.exec_()
+        if (retval != 16384): #l'utente NON ha cliccato yes: sceglie di fermarsi, esco
+            Utils.logMessage('PIPES: utente decide di uscire')
+            return 0
+        elif (retval == 16384): #l'utente HA CLICCATO YES.
+            Utils.logMessage('PIPES: inizio la procedura')
+    
+        #verifico esista il campo tub_label:
+        query_exist = "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='%s' AND table_name='ebw_route' AND column_name='tub_label');" % (theSchema)
+        cur_pipes.execute(query_exist)
+        if cur_pipes.fetchone()[0]==True:
+            Utils.logMessage("campo tub_label su route gia' esistente, continuo")
+        else:
+            Utils.logMessage("campo tub_label su route non esistente: lo creo")
+            query_tub = "ALTER TABLE %s.ebw_route ADD COLUMN tub_label character varying(32);" % (theSchema)
+            cur_pipes.execute(query_tub)
+            conn_pipes.commit()
+        
+        #A questo punto posso procedere con la compilazione di questo campo:
+        try:
+            query = "SET search_path = %s, public, pg_catalog;" % (theSchema)
+            cur_pipes.execute(query)
+            sql_file = os.getenv("HOME") + '/.qgis2/python/plugins/ProgettoPNI/calcolo_minitubi.sql'
+            cur_pipes.execute(open(sql_file, "r").read())
+            conn_pipes.commit()
+            
+            cur_pipes.close()
+            
+        except psycopg2.Error, e:
+            Utils.logMessage(e.pgerror)
+            conn_pipes.rollback()
+            QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di DB nel calcolo dei minitubi per route. Esco dalla procedura')
+            Utils.logMessage('Errore di DB nel calcolo dei minitubi per route. Esco dalla procedura')
+        except SystemError, e:
+            conn_pipes.rollback()
+            QMessageBox.warning(self.dock, self.dock.windowTitle(), 'Errore di sistema nel calcolo dei minitubi per route. Esco dalla procedura')
+            Utils.logMessage('Errore di sistema nel calcolo dei minitubi per route. Esco dalla procedura')
+        else:
+            #ricarico il layer sperando si riprenda la eventuale creazione del nuovo campo tub_label:
+            PNI_ROUTE_layer.setDataSource( PNI_ROUTE_layer.source(), PNI_ROUTE_layer.name(), PNI_ROUTE_layer.providerType() )
+            Utils.logMessage('PIPES: fine della procedura con successo')
+            msg.setText("Minitubi: calcolo effettuato con successo!")
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowTitle("Minitubi: calcolo effettuato con successo!")
+            msg.setStandardButtons(QMessageBox.Ok)
+            retval = msg.exec_()
+            return 1
+        finally:
+            if conn_pipes:
+                conn_pipes.close()
+
+        
+    
     def run_label(self):
         result_init = self.inizializza_layer_PNI()
         if (result_init==0):

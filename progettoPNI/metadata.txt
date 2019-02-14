@@ -11,10 +11,10 @@ name=ProgettoPNI
 qgisMinimumVersion=2.14
 qgisMaximumVersion=2.18
 description=import dati progetto PNI
-version=1.0.0
+version=2.0.0
 author=A.R.Gaeta/Vertical Srl
 email=info@vertical.digital
-release_date=2019/01/25
+release_date=2019/02/14
 
 about=Questo plugin permette di gestire la progettazione della rete PNI
 
@@ -26,6 +26,7 @@ repository=github.com
 
 # Uncomment the following line and add your changelog:
 changelog=
+	2.0:  - sviluppata funzione calcolo minitubi - funzione run_pipes
 	1.0:  - sviluppata funzione creazione labels per il layer ebw_cavo lanciando uno split_lines per unire le sovrapposizioni. Funzione run_label
 	0.2:  - sviluppata la funzione per esportare il progetto da DB a shp
 	0.1:  - prima versione. Per renderla compatibile con QGis 2.18, ricordarsi la modifica del comando da selectByIds a setSelectedFeatures
