@@ -44,6 +44,9 @@ WHEN tipo ilike 'microtunneling' AND numero_cav>=5 AND numero_cav<9 THEN '(2x7-1
 WHEN tipo ilike 'microtunneling' AND numero_cav>=9 THEN '(3x7-10/12)'
 --"Rete Altri Interrata"
 WHEN tipo ilike 'rete altri interrata' THEN '(' || numero_cav || '-10/12)'
+WHEN tipo ilike 'canaletta fezn o vtr' THEN '(' || numero_cav+3 || '-10/12)'
+WHEN tipo ilike 'rete ed aerea' THEN NULL
+WHEN tipo ilike 'adduzione' THEN NULL
 END AS minitubo
 FROM calcolo_minitubi) foo
 WHERE foo.gidd_route = ebw_route.gidd;
